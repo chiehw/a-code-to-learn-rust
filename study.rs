@@ -250,15 +250,262 @@ fn main() {
     println!("-3 negative ? {}", (-3).is_strictly_negative());
 
 
-    // 
+    // Copy：只是起标识作用，会直接影响编译器的编译，如果没有使用 Copy 标识，那么就不能被多次拷贝。
+    // Number 结构体使用 Copy 来标识
+    let n = Number { odd: true, value: 987 };
+    let m = n;
+    // todo：let o = n;
+    let a: i32 = 15;
+    let b = a; // `a` 被拷贝
+    let c = a; // `a` 再次被拷贝
+
+    // 如果不改变原有值，可以考虑使用不可变引用。
+    let n = Number { odd: true, value: 987 };
+    let m: &Number = &n;
+    println!("m value: {}", m.value);
+    let o: &Number = &n;
+    println!("o value: {}", o.value);
+    // 如果需要改变，使用可变应用（mutable reference）
+    let mut n = Number { odd: true, value: 987 };
+    let m: &mut Number = &mut n;
+    m.value = 123;
+    println!("m value: {}", m.value);
+    let o: &mut Number = &mut n;
+    println!("o value: {}", o.value);
+    
+    // 实现 Clone Trait
+    // Self 指当前数据的数据类型，self 指数据本身
+    impl std::clone::Clone for Number{
+        fn clone(&self)->Self{
+            Self { ..*self }
+        }
+    }
+    // 执行 trait 方法时,接收者（receiver）是隐式借用
+    let n = Number{odd: true, value:51};
+    let mut m = n.clone();
+    m.value = 100;
+    println!("m value: {}, n value: {}", m.value, n.value);
+    // 下面的写法和上面是等价的
+    let m = std::clone::Clone::clone(&n);
+    
+    // 标识 copy 
+    impl std::marker::Copy for Number {}
+    let n = Number { odd: true, value: 51 };
+    let mut m = n; 
+    let o = n;
+    m.value = 150;
+    println!("m value: {}, n value: {}", m.value, n.value);
+
+
+    // Clone 和 Copy 是经常使用的 Trait，并且编写并不复杂，所以可以使用 derive 属性来自动生成。
+    #[derive(Copy, Clone)]
+    struct Num{
+        odd: bool,
+        value: i32
+    }
+    let n = Num { odd: true, value: 51 };
+    let mut m = n; 
+    let o = n;
+    m.value = 200;
+    println!("Num Struct -> m value: {}, n value: {}", m.value, n.value);
+
+    /*||||||||||||||||||||||||||||| 泛型 |||||||||||||||||||||||||||||||||||||| */
+
+    // 函数设置为泛型（没有数据类型，只有参数）
+    use std::fmt::{Debug, Display};
+    fn print<T:Display>(value: T){
+        println!("value = {}", value);
+    }
+    // 当然还可以对泛型进行约束，标识使用范围（要求一个数据类型实现多个 Trait）。
+    fn compare<T>(left: T, right: T) where T: Debug + PartialEq,{
+        println!("{:?} {} {:?}", left, if left == right{"=="}else{"!="}, right);
+    }
+    compare("tea", "coffee");
+    compare(1, 1);
+
+    // 泛型函数可以被当作命名空间，因为里面包含了很多具体的函数。
+    // 所以可以使用 :: 来绑定泛型的类型（turbofish语法，::<>看起来像一条鱼）
+    let v = Vec::<bool>::new();
+    println!("{:?}", v);
+    let v: Vec<bool> = Vec::new();
+    println!("{:?}", v);
+
+    // 提到 Vec，还有一个 vec! 的宏（Vec字面量），用于快速创建 Vec。
+    let v1 = vec![1, 2, 3];
+    let v2 = vec![true, false, false];
+    println!("macro: {:?}", v1);
+    println!("macro: {:?}", v2);
+    // vec!()， vec![]，vec!{} 都可以调用这个宏
+    let v1 = vec!(1, 2, 3);
+    let v2 = vec!(true, false, false);
+    println!("macro: {:?}", v1);
+    println!("macro: {:?}", v2);
+
+    // 事实上，println! 也是一个宏。
+    println!("{}", "Hello World!");
+    // 等价的写法
+    use std::io::{self, Write};
+    io::stdout().lock().write_all(b"Hello World!\n").unwrap();
+
+    // panic 也是一个宏，它会输出一个错误信息，并且强制终止程序。
+    // todo: panic!("panic!");
+    
+    // 一些方法也会造成 panic，比如 Option 类型不包含任何东西的时候调用 unwrap 函数。
+    enum Option<T> {
+        None,
+        Some(T),
+    }
+    
+    impl<T> Option<T> {
+        fn unwrap(self) -> T {
+            // enums variants can be used in patterns:
+            match self {
+                Self::Some(t) => t,
+                Self::None => panic!(".unwrap() called on a None option"),
+            }
+        }
+    }
+
+    /*||||||||||||||||||||||||||||| 生命周期 |||||||||||||||||||||||||||||||||||||| */
+    
+    // 变量声明是有生命周期的
+    {
+        let x = 42;
+        println!("x = {}", x);
+    }
+    // x 声明周期结束，无法找到 x
+
+    // 类似，变量引用也有生命周期。
+    {
+        let x = 42;
+        let x_ref = &x;
+        println!("x_ref = {}", x_ref);
+    }
+
+    // 1. 引用的生命周期不能超过原变量的声明周期
+    let x_ref = {
+        let x = 1;
+        1
+        // todo: &x
+    };
+    println!("x_ref = {}", x_ref);
+
+    // 2. 变量可以多次不可变借用。
+    let x = 42;
+    let x_ref1 = &x;
+    let x_ref2 = &x;
+    let x_ref3 = &x;
+    println!("x_ref1 = {}, x_ref2 = {}, x_ref3 = {}", x_ref1, x_ref2, x_ref3);
+
+    // 3. 可变变量在被借用（不可变借用+可变借用）的时候，无法修改
+    let mut x = 32;
+    let x_ref = &x;
+    // todo：let mut x_ref = &mut x;
+    // todo: x = 99;
+    println!("x_ref = {}", x_ref);
+
+    // 4. 如果变量已经被不可变借用，就不能再被可变借用
+    let mut x = 22;
+    let x_ref1 = &x;
+    // todo: let x_ref2 = &mut x;
+    println!("x_ref1 = {}", x_ref1);
+
+
+    // 函数参数也有生命周期
+    // 带有引用参数的函数都是泛型。
+    fn printl(x: &i32){}
+
+    // 生命周期可以使用 ' 来进行标注（命名），这里标注了引用的生命周期，所以写成 &'a
+    fn printlt<'a>(x: &'a i32){}
+
+    // 使用命名后的生命周期，可以让函数返回引用，引用的生命周期依赖于函数参数的生命周期。
+    struct NewNumber{
+        value: i32
+    }
+    fn number_value<'a>(num: &'a NewNumber) -> &'a i32{
+        &num.value
+    }
+    let n = NewNumber{ value: 47};
+    let v = number_value(&n);       // 直接把函数内部的引用传出来了。上面的写法比较多余，不使用命名生命周期也可以实现。
+
+    // 结构体也可以使用命名生命周期
+    struct NumRef<'a>{
+        x: &'a i32
+    }
+    let x: i32 = 99;
+    let x_ref = NumRef{
+        x: &x
+    };
+    
+    // impl 代码块也可以使用命名生命周期
+    impl<'a> NumRef<'a>{
+        fn as_i32_ref(&'a self)->&'a i32{
+            self.x
+        }
+    }
+    let x = 99;
+    let x_num_ref = NumRef{ x: &x};
+    let x_i32_ref = x_num_ref.as_i32_ref();
+    println!("x_i32_ref = {}", x_i32_ref);
+
+    // 如果嫌弃命名生命周期写起来太麻烦，可以使用省略写法
+    impl<'a> NumRef<'a>{
+        fn as_i32_refElide(&self)->&i32{
+            self.x
+        }
+    }
+    impl NumRef<'_>{
+        fn as_i32_refElideElide(&self)->&i32{
+            self.x
+        }
+    }
+
+    // 'static 是一种特殊的生命周期，可以让变量在整个运行时都有效
+    struct Person{
+        name: &'static str,
+    }
+    let p = Person{
+        name: &"Bob"
+    };
+
+    // 但由堆分配的字符串（owned strings）不能设置为 'static
+    let n = format!("name: {}", "Alice");
+    // todo: let pa = Person{name: &n};
+
+    // 想要存储一个普通字符串（non-'static）到 Person 中，可以用下面两种办法
+    // 1. 借用
+    struct PersonA<'a>{
+        name: &'a str
+    }
+    let name = format!("name: {}", "Alice");
+    let p = PersonA{ name: &name};
+    // 2. 申请一个新的字符串。
+    struct PersonB{
+        name: String
+    }
+    let name = format!("name: {}", "Alice");
+    let p = PersonB{ name: name};
+    // 顺便提一句，当字段名和变量名相同时，可以省略
+    let name = format!("name: {}", "Alice");
+    let q = PersonB{name};
+
+    /*||||||||||||||||||||||||||||| 数组切片 |||||||||||||||||||||||||||||||||||||| */
+
+    // 切片可以获得数组 Vec 中连续的一组元素。
+    let v = vec![1, 2, 3, 4, 5, 6];
+    let v2 = &v[2..4];          // .. 在结构体中可以更新字段。
+    println!("v2 = {:?}", v2); 
+
+    // 在这里，.. 的含义是 Range。类似 Python 中的 range，都是半闭半开，2..4 表示集合 [2, 4)。
+
+
 
     
-
-
-
-
- 
+    
 }
 
 // 拓展阅读：
 // 1. Trait 孤儿原则
+// 2. Clone VS Copy：https://zhuanlan.zhihu.com/p/21730929
+// 3. Lifetime: 
+// 4. str Vs String
