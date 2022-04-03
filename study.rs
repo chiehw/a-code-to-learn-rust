@@ -670,9 +670,52 @@ fn main() -> Result<(), std::str::Utf8Error> {
     countdown(3, |i|println!("tick {}", i));
     countdown(3, |_|());
 
+    // 利用从函数返回一个闭包
+    fn make_tester(answer: String) -> impl Fn(&str) -> bool{
+        move |challenge|{
+            challenge == answer
+        }
+    }
+    // into 可以将 'static str 转换为 String
+    let test = make_tester("hunter2".into());
+    println!("hunter2?: {}", test("*****"));
+    println!("hunter2: {}", test("hunter2"));
+
+    // 还可以将参数引入到闭包中
+    fn make_tester_into<'a>(answer: &'a str)->impl Fn(&str) ->bool+'a{
+        move |chanllenge|{
+            chanllenge == answer
+        }
+    }
+    let test = make_tester_into("hunter2");
+    println!("into: {}", test("*****"));
+    println!("into: {}", test("hunter2"));
+
     /*||||||||||||||||||||||||||||| 可迭代类型 |||||||||||||||||||||||||||||||||||||| */
 
-    
+    // 可迭代的类型都可以在 for in 中使用
+    for i in vec![52, 49, 21]{
+        println!("I like the number {}", i);
+    }
+
+    // chars 迭代器，或者 bytes 迭代器
+    for i in "rust".chars(){
+        println!("give me a {}", i);
+    }
+
+    // 迭代器使用过滤器（filtered）、映射（mapped）、单一化（flattened）后依然是可迭代类型，且可以使用 for in 遍历
+    for c in "SuRPRISE INbOUND".chars()
+        .filter(
+            | c | c.is_uppercase() || !c.is_ascii_alphabetic()
+        )
+        .flat_map(|c|c.to_lowercase())
+        {
+            print!("{}", c);
+    }
+    println!();
+
+
+
 
 
     // main 函数的返回值
