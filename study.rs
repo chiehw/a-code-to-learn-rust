@@ -4,7 +4,7 @@
 // 编译运行：clear && rustc study.rs  && ./study
 // 食用指南：从上到下读懂代码即可。使用 todo 标注的部分，都需要你把注释删掉，尝试自行编译运行。
 
-fn main() {
+fn main() -> Result<(), std::str::Utf8Error> {
     /*||||||||||||||||||||||||||||| 变量 |||||||||||||||||||||||||||||||||||||| */
     // let 表示声明变量。
     let x;
@@ -351,12 +351,12 @@ fn main() {
     // todo: panic!("panic!");
     
     // 一些方法也会造成 panic，比如 Option 类型不包含任何东西的时候调用 unwrap 函数。
-    enum Option<T> {
+    enum MyOption<T> {
         None,
         Some(T),
     }
     
-    impl<T> Option<T> {
+    impl<T> MyOption<T> {
         fn unwrap(self) -> T {
             // enums variants can be used in patterns:
             match self {
@@ -496,12 +496,189 @@ fn main() {
     let v2 = &v[2..4];          // .. 在结构体中可以更新字段。
     println!("v2 = {:?}", v2); 
 
-    // 在这里，.. 的含义是 Range。类似 Python 中的 range，都是半闭半开，2..4 表示集合 [2, 4)。
+    // 在这里，.. 的含义是 range。类似 Python 中的 range，都是半闭半开，2..4 表示集合 [2, 4)。
+    // 如果想要包含最右边的元素，可以使用等号来处理
+    println!("(0..) contains 100? {:?}", (0..).contains(&100));
+    println!("(..20) contains 20? {:?}", (..20).contains(&20));
+    println!("(..=20) contains 20? {:?}", (..=20).contains(&20));
+    println!("(3..6) contains 4? {:?}", (3..6).contains(&4));
+
+    // 借用的时候也可以使用切片
+    fn tail(s: &[u8]) -> &[u8] {
+        &s[1..]
+    }
+    let x = [1, 2, 3, 4, 5];
+    let y = tail(&x);
+    println!("y = {:?}", y);
+
+    // 下面这样也是合法的，因为 [1,2, 3, 4, 5] 的生命周期是 'static
+    let y = {
+        let x = &[1, 2, 3, 4, 5];
+        // todo（不合法）: let x = [1, 2, 3, 4, 5]; tail(&x)
+        // Vector 是分配在堆上的，生命周期不是 'static。
+        // todo（不合法）: let x = &vec![1, 2, 3, 4, 5];
+        tail(x)
+    };
+    println!("y = {:?}", y);
+
+    // 上面的 tail 函数还可以写成
+    fn new_tail<'a>(s: &'a [u8]) -> &'a [u8]{
+        &s[1..]
+    }
+    let x = [1, 2, 3, 4, 5];
+    let y = new_tail(&x);
+    println!("y = {:?}", y);
 
 
+    // &str 也可以使用切片。
+    fn file_ext(name: &str) -> Option<&str>{
+        name.split(".").last()
+    }
+    let name = "hello.txt";
+    if let Some(ext) = file_ext(name){
+        println!("file extension: {}", ext);
+    }else{
+        println!("no file extension.");
+    }
+
+    /*||||||||||||||||||||||||||||| 错误处理 |||||||||||||||||||||||||||||||||||||| */
+    // 当函数调用失败，通常会返回一个 Result 类型的数据
+    let s = std::str::from_utf8(&[240, 159, 141, 137]);
+    println!("{:?}", s);
+    let s = std::str::from_utf8(&[195, 40]);
+    println!("{:?}", s);
+
+    // 如果想要让程序直接暂停，可以使用 unwrap()
+    // todo: let s = std::str::from_utf8(&[195, 40]).unwrap();
+    println!("{:?}", s);
+
+    // 如果想要输出自定义的错误信息，可以使用 expect()
+    // todo: let s = std::str::from_utf8(&[195, 40]).expect("valid utf-8");
+    println!("{:?}", s);
+    // 使用 match 也可以输出自定义的消息
+    match std::str::from_utf8(&[240, 159, 141, 137]){
+        Ok(s) => println!("{:?}", s),
+        Err(e) => panic!(e),
+    }
+    
+    // 还可以使用 match 把错误抛到上一层
+    match std::str::from_utf8(&[240, 159, 141, 137]){
+        Ok(s) => println!("{:?}", s),
+        Err(e) => return Err(e),
+    }
+
+    /*||||||||||||||||||||||||||||| 解引用 |||||||||||||||||||||||||||||||||||||| */
+    // * 操作符可以用于解引用，访问内部字段或者调用方法时可以不解引用。
+    struct NewPoint {
+        x: f64, 
+        y: f64
+    }
+    let p = NewPoint{x: 1.0, y: 2.0};
+    let p_ref = &p;
+    println!("({}, {})", p_ref.x, p_ref.y);
+    
+    // 解引用只能用于实现了 Copy Trait 的类型上使用
+    #[derive(Clone, Copy)]
+    struct CopyPoint {
+        x: f64, 
+        y: f64
+    }
+    fn negative(p: CopyPoint) -> CopyPoint{
+        CopyPoint{
+            x: -p.x,
+            y: -p.y
+        }
+    }
+    let p = CopyPoint{x: 1.0, y: 2.0};
+    let p_ref = &p;
+    let np = negative(*p_ref);
+    println!("({}, {})", np.x, np.y);
+
+    /*||||||||||||||||||||||||||||| 闭包 |||||||||||||||||||||||||||||||||||||| */
+
+    // 闭包是 Fn、FnMut、FnOnce 类型的函数，并且可以捕获上下文
+    // 闭包的参数放在一对竖线（|）之间，并且不需要大括号，除非你需要写多个语句。
+    fn for_each_planet<F>(f: F) where F:Fn(&'static str){
+        f("Earth");
+        f("Mars");
+        f("Jupiter");
+    }
+    for_each_planet(| planet | println!("Hello {}", planet));
+
+    // 闭包中的借用规则
+    let greeting  = String::from("Good to see you");
+    // 借用 greeting
+    for_each_planet(| planet | println!("{} {}", greeting, planet));
+
+    fn for_each_planet_static<F>(f: F) where F: Fn(&'static str) + 'static{
+        f("Earth");
+        f("Mars");
+        f("Jupiter");
+    }
+    let greeting  = String::from("Static");
+    // greeting 生命周期虽然比函数长，但不符合 'static 
+    // todo: for_each_planet_static(| planet | println!("{} {}", greeting, planet));
+    // 使用move强制获取变量所有权
+    for_each_planet_static(move |planet| println!("{}, {}", greeting, planet));
+
+    // FnMut 参数必须是可变借用，所以在使用时只能调用一次。但 Fn 却可以多次调用
+    fn foobar_fn<F>(f: F) where F: Fn(i32) -> i32{
+        println!("{}", f(f(2)));
+    }
+    foobar_fn(| x | x*2);
+
+    fn foobar_fnmut<F>(mut f: F) where F: FnMut(i32) -> i32{
+        // todo: println!("{}", f(f(2)));
+        let tmp = f(2);
+        println!("{}", f(tmp));
+    }
+    foobar_fnmut(| x | x*2);
+
+    // FnMut 可变借用局部变量，但 Fn 却不能实现。
+    let mut acc = 2;
+    foobar_fnmut(| x |{
+        acc += 1;
+        x * acc
+    });
+    println!("acc {}", acc);
+
+    // FnOnce 传入的闭包只能被调用一次。有时传入的闭包中含有 moved 进来的变量，只调用一次是最好的。
+    fn foobar_fnonce<F>(f: F) where F: FnOnce() -> String{
+        println!("{}", f());
+        //todo：println!("{}", f());
+    }
+    let s = String::from("call FnOnce");
+    foobar_fnonce(move || s);
+
+    // 带有两个参数的闭包
+    fn foobar_two<F>(x: i32, y: i32, is_greater: F) where F:Fn(i32, i32) -> bool{
+        let (greater, smaller) = if is_greater(x, y){
+            (x, y)
+        }else{
+            (y, x)
+        };
+        println!("{} is greater than {}", greater, smaller);
+    }
+    foobar_two(32, 64, |x, y| x>y);
+
+    // 马桶闭包：什么都不做
+    fn countdown<F>(count: usize, tick: F) where F:Fn(usize){
+        for i in (1..=count).rev(){
+            tick(i);
+        }
+    }
+    countdown(3, |i|println!("tick {}", i));
+    countdown(3, |_|());
+
+    /*||||||||||||||||||||||||||||| 可迭代类型 |||||||||||||||||||||||||||||||||||||| */
 
     
-    
+
+
+    // main 函数的返回值
+    Ok(())
+    // https://juejin.cn/post/6844904079915745288
+    // https://juejin.cn/post/6844904080314204173
 }
 
 // 拓展阅读：
@@ -509,3 +686,5 @@ fn main() {
 // 2. Clone VS Copy：https://zhuanlan.zhihu.com/p/21730929
 // 3. Lifetime: 
 // 4. str Vs String
+// 5. deref、derefmut 对应智能指针，常规解引用估计（C 语言常识
+// 6. 命名空间
